@@ -7,6 +7,15 @@ import pandas as pd
 
 # Scrape song
 def scrape_song(url):
+    """
+        Scrapes lyrics and some metadata from a Rap Genius lyrics page.
+
+        Args:
+            url (str): The URL of the page to scrape.
+
+        Returns:
+            dict representing a song object.
+    """
     print('Scraping ' + url)
     r = requests.get(url)
     soup = BeautifulSoup(r.text, 'html.parser')
@@ -58,6 +67,14 @@ def scrape_song(url):
 
 
 def get_release_date(song_id):
+    """
+        Given a Genius song ID, returns the release date.
+
+        Args:
+            song_id (int or str): The song ID.
+        Returns:
+            The YYYY-MM-DD date as a str.
+    """
     url = "https://genius.com/api/songs/{0}".format(song_id)
     r = requests.get(url)
     result = r.json()
@@ -65,6 +82,15 @@ def get_release_date(song_id):
 
 
 def get_song_tags(song):
+    """
+        Given a song object from https://genius.com/api/songs/, returns the tags.
+        First attempts to get tags from the `tags` key, and if None, uses `tracking_data`.
+
+        Args:
+            song (dict): The `song` attribute from https://genius.com/api/songs/{id}.
+        Returns:
+            A list of tags.
+    """
     if song.get('tags'):
         tags = [x['name'] for x in song.get('tags')]
     else:
@@ -73,6 +99,14 @@ def get_song_tags(song):
 
 
 def enrich_song_data(song_id):
+    """
+        Fetches additional data from the Genius API.
+
+        Args:
+            song_id (int or str): The Genius ID of the song.
+        Returns:
+            A dict of additional song data.
+    """
     print('Fetching additional data...')
     url = "https://genius.com/api/songs/{0}".format(song_id)
     r = requests.get(url)
@@ -95,6 +129,16 @@ def enrich_song_data(song_id):
 
 
 def scrape_artist_songs(artist_id):
+    """
+        Grabs all of an artist's songs from the Genius API, scrapes each song
+        page for lyrics, then further enriches the scraped data with additonal
+        information from the API.
+
+        Args:
+            artist_id (str or int): The Genius artist ID.
+        Returns:
+            A list of dicts of song data for all songs by the artist.
+    """
     songs = []
     next_page = 1
     while isinstance(next_page, int):
