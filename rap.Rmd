@@ -1,0 +1,67 @@
+---
+title: "Rap Lyric Sentiment Analysis"
+author: "Anthony Baker"
+date: "5/7/2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(jsonlite)
+```
+
+```{r}
+# Read Data
+future_raw <- readr::read_csv("future_3.csv") %>%
+  select(-X1)
+```
+
+```{r}
+# Inspect & Clean
+future_raw %>%
+  nrow()
+
+future_raw %>% 
+  filter(primary_artist_id == 2197) %>%
+  nrow()
+
+future_raw %>% 
+  count(primary_artist_id, sort = T)
+
+future_raw %>% 
+  count(lyrics_language, sort = T)
+
+future_raw %>% 
+  count(published, sort = T)
+
+future_raw %>%
+  mutate(metadata = jsonlite::fromJSON(metadata))
+
+future <- future_raw %>%
+  filter(lyrics_language == "en",
+         primary_artist_id == 2197)
+```
+
+```{r}
+# Unnest Tags
+future_tags <- future %>%
+  mutate(tags = str_remove_all(tags, "'"),
+         tags = str_remove_all(tags, "(\\[|\\])"),
+         tags = str_split(tags, ", ")) %>%
+  unnest(tags)
+  
+future_tags %>%
+  count(tags, sort = T)
+```
+
+```{r}
+# TODO: I can't remove all [] or ' characters, so how do I clean + unnest?
+future %>%
+  select(-tags) %>%
+  distinct(song_id, .keep_all = T) %>%
+  mutate(lyrics = fromJSON(lyrics))
+```
+

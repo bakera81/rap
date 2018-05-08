@@ -52,16 +52,29 @@ def scrape_song(url):
 
     # Assumption: All lyrics are in a <div class="lyrics">
     lyrics_tag = soup.find('div', class_='lyrics')
+    # TODO: is stripped_strings parsing everything correctly?
     lyrics = [lyric for lyric in lyrics_tag.stripped_strings]
+
+    # Flatten metadata
+    # TODO: If this is the preferred way, dont make it a list initially
+    # TODO: What happens if there are duplicate keys?
+    # TODO: The URLs in metadata are weird and javascripty
+    # TODO: Fully flatten metadata
+    result = {}
+    for md in metadata:
+        result.update(md)
+    metadata = result
 
     song = {
         'url': url,
         'title': title,
         'artist': artist,
         'artist_url': artist_url,
-        'metadata': metadata,
-        'lyrics': lyrics
+        # 'metadata': json.dumps(metadata),
+        'lyrics': json.dumps(lyrics)
     }
+
+    song = {**song, **metadata}
 
     return song
 
@@ -120,8 +133,9 @@ def enrich_song_data(song_id):
         'release_date': song.get('release_date'),
         'published': song.get('published'),
         'recording_location': song.get('recording_location'),
+        'title_with_featured': song.get('title_with_featured'),
         'lyrics_language': language,
-        'tags': get_song_tags(song),
+        'tags': json.dumps(get_song_tags(song)),
         'featured_artist_ids': featured_artist_ids
     }
 
@@ -149,7 +163,7 @@ def scrape_artist_songs(artist_id):
         r = requests.get(url)
         result = r.json()
         next_page = result['response']['next_page']
-
+        next_page = ''
         for song in result['response']['songs']:
             lyric = scrape_song(song['url'])
             # Get release date
@@ -201,7 +215,10 @@ def scrape_album():
 #     print('Scraping ' +  url)
 #     lyrics.append(scrape_song(url))
 
-songs = scrape_artist_songs(2197)
 
-df = pd.DataFrame(songs)
-df.to_csv('future.csv')
+# TODO: Why does https://genius.com/Dj-esco-100it-racks-lyrics parse '[Intro: DJ Esco + Future]' into pieces?
+def scrape_future():
+    songs = scrape_artist_songs(2197)
+    # TODO: Should metadata be flattened? Probably...
+    df = pd.DataFrame(songs)
+    df.to_csv('future_3.csv')
