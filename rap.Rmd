@@ -15,7 +15,7 @@ library(jsonlite)
 
 ```{r}
 # Read Data
-future_raw <- readr::read_csv("future_3.csv") %>%
+future_raw <- readr::read_csv("data/future_sample.csv") %>%
   select(-X1)
 ```
 
@@ -37,9 +37,6 @@ future_raw %>%
 future_raw %>% 
   count(published, sort = T)
 
-future_raw %>%
-  mutate(metadata = jsonlite::fromJSON(metadata))
-
 future <- future_raw %>%
   filter(lyrics_language == "en",
          primary_artist_id == 2197)
@@ -58,10 +55,15 @@ future_tags %>%
 ```
 
 ```{r}
-# TODO: I can't remove all [] or ' characters, so how do I clean + unnest?
 future %>%
   select(-tags) %>%
   distinct(song_id, .keep_all = T) %>%
-  mutate(lyrics = fromJSON(lyrics))
+  mutate(lyrics = str_replace(lyrics, '^\\[', ''),
+         lyrics = str_replace(lyrics, '\\]$', ''),
+         lyrics = str_replace_all(lyrics, '"', ''),
+         lyrics = str_split(lyrics, ', ')) %>%
+  unnest(lyrics) %>%
+  View()
+# Ready for tidytext!
 ```
 

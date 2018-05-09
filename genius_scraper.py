@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 import time
 import json
 import pandas as pd
+import pdb
 
 
 # Scrape song
@@ -34,47 +35,39 @@ def scrape_song(url):
 
     # Assumption: All metadata is in divs with class="metadata_unit-*"
     # Assumption: All metadata info is contained in <a>
-    metadata = []
+    metadata = {}
     for md in header.find_all('div', class_='metadata_unit'):
         label = md.find('span', class_='metadata_unit-label')
-        item = {}
-        item[label.text] = []
-        # print(label.text)
         info = md.find('span', class_='metadata_unit-info')
         for a in info.find_all('a'):
-            # print(a.text.strip())
-            # print(a.get('href'))
-            item[label.text].append({
-                'text': a.text.strip(),
-                'href': a.get('href')
-            })
-        metadata.append(item)
+            metadata['{}__text'.format(label.text.replace(' ', '_')).lower()] = a.text.strip()
+            metadata['{}__href'.format(label.text.replace(' ', '_')).lower()] = a.get('href')
 
     # Assumption: All lyrics are in a <div class="lyrics">
     lyrics_tag = soup.find('div', class_='lyrics')
-    # TODO: is stripped_strings parsing everything correctly?
+
+    # Remove style tags which create new stripped_strings
+    invalid_tags = ['b', 'i', 'u']
+    for tag in invalid_tags:
+        for match in lyrics_tag.findAll(tag):
+            match.replaceWithChildren()
+
     lyrics = [lyric for lyric in lyrics_tag.stripped_strings]
 
     # Flatten metadata
-    # TODO: If this is the preferred way, dont make it a list initially
     # TODO: What happens if there are duplicate keys?
     # TODO: The URLs in metadata are weird and javascripty
-    # TODO: Fully flatten metadata
-    result = {}
-    for md in metadata:
-        result.update(md)
-    metadata = result
 
     song = {
         'url': url,
         'title': title,
         'artist': artist,
         'artist_url': artist_url,
-        # 'metadata': json.dumps(metadata),
         'lyrics': json.dumps(lyrics)
     }
 
     song = {**song, **metadata}
+    # song.update(metadata)
 
     return song
 
@@ -216,9 +209,7 @@ def scrape_album():
 #     lyrics.append(scrape_song(url))
 
 
-# TODO: Why does https://genius.com/Dj-esco-100it-racks-lyrics parse '[Intro: DJ Esco + Future]' into pieces?
 def scrape_future():
     songs = scrape_artist_songs(2197)
-    # TODO: Should metadata be flattened? Probably...
     df = pd.DataFrame(songs)
-    df.to_csv('future_3.csv')
+    df.to_csv('future_sample.csv', tupleize_cols=False)
