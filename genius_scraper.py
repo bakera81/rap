@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import time
 import json
 import pandas as pd
-import pdb
+from genius_db import *
 
 
 # Scrape song
@@ -103,7 +103,7 @@ def get_song_tags(song):
         tags = [x['value'] for x in song.get('tracking_data') if x['key'] == 'Tag']
     return tags
 
-
+# TODO: Add lyrics_created_at, lyrics_updated_at
 def enrich_song_data(song_id):
     """
         Fetches additional data from the Genius API.
@@ -122,12 +122,18 @@ def enrich_song_data(song_id):
 
     language = [x['value'] for x in song.get('tracking_data') if x['key'] == 'Lyrics Language'][0]
     featured_artist_ids = [x['id'] for x in song.get('featured_artists')]
+    lyrics_created_at = [x['value'] for x in song.get('tracking_data') if x['key'] == 'created_at'][0]
+    album_id = song.get('album').get('id') if song.get('album') else None
     data = {
         'release_date': song.get('release_date'),
         'published': song.get('published'),
         'recording_location': song.get('recording_location'),
         'title_with_featured': song.get('title_with_featured'),
+        'album_id': album_id,
         'lyrics_language': language,
+        'lyrics_created_at': lyrics_created_at,
+        'lyrics_updated_at': song.get('lyrics_updated_at'),
+        'lyrics_state': song.get('lyrics_state'),
         'tags': json.dumps(get_song_tags(song)),
         'featured_artist_ids': featured_artist_ids
     }
@@ -157,7 +163,7 @@ def scrape_artist_songs(artist_id):
         result = r.json()
         next_page = result['response']['next_page']
         next_page = ''
-        for song in result['response']['songs']:
+        for song in result['response']['songs'][5:8]:
             lyric = scrape_song(song['url'])
             # Get release date
             # song_id = song['api_path'].replace('/songs/', '')
@@ -177,6 +183,7 @@ def scrape_artist_songs(artist_id):
 
 # Rick Ross: 88
 # Future: 2197
+# TODO: make sure this can handle temporary internet disconnects
 def api_artist_songs(artist_id):
     songs = []
     next_page = 1
@@ -212,4 +219,6 @@ def scrape_album():
 def scrape_future():
     songs = scrape_artist_songs(2197)
     df = pd.DataFrame(songs)
-    df.to_csv('future_sample.csv', tupleize_cols=False)
+    engine = db_connect()
+    df.to_sql('songs', engine)
+    df.to_csv('data/future_sample.csv')

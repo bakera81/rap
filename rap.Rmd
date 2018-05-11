@@ -17,6 +17,33 @@ library(jsonlite)
 # Read Data
 future_raw <- readr::read_csv("data/future_sample.csv") %>%
   select(-X1)
+
+future_raw %>%
+  select(song_id,
+         title, 
+         title_with_featured,
+         release_date,
+         url, 
+         published,
+         tags,
+         recording_location,
+         artist,
+         primary_artist_id,
+         artist_url,
+         featured_artist_ids,
+         featuring__href,
+         featuring__text,
+         album_id,
+         album__href,
+         album__text,
+         produced_by__href,
+         produced_by__text,
+         lyrics_language,
+         lyrics_created_at,
+         lyrics_updated_at,
+         lyrics_state,
+         lyrics) %>%
+  names() %>% length()
 ```
 
 ```{r}
@@ -65,5 +92,22 @@ future %>%
   unnest(lyrics) %>%
   View()
 # Ready for tidytext!
+```
+
+```{r}
+# Read from the DB!
+library(DBI)
+library(yaml)
+creds = read_yaml("db/genius_db.yml")
+con <- dbConnect(RMariaDB::MariaDB(), 
+                 username = creds$username,
+                 password = creds$password,
+                 host = creds$host,
+                 dbname = creds$database)
+dbListTables(con)
+
+res <- dbSendQuery(con, "SELECT * FROM songs_v1")
+songs <- dbFetch(res)
+dbClearResult(res)
 ```
 
