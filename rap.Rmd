@@ -11,6 +11,8 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(jsonlite)
+library(DBI)
+library(yaml)
 ```
 
 ```{r}
@@ -96,8 +98,6 @@ future %>%
 
 ```{r}
 # Read from the DB!
-library(DBI)
-library(yaml)
 creds = read_yaml("db/genius_db.yml")
 con <- dbConnect(RMariaDB::MariaDB(), 
                  username = creds$username,
@@ -109,5 +109,16 @@ dbListTables(con)
 res <- dbSendQuery(con, "SELECT * FROM songs_v1")
 songs <- dbFetch(res)
 dbClearResult(res)
+```
+
+```{r}
+songs %>%
+  # TODO: Are lyric lines being split properly?
+  mutate(lyrics = str_replace(lyrics, '^\\[', ''),
+         lyrics = str_replace(lyrics, '\\]$', ''),
+         # lyrics = str_replace_all(lyrics, '"', ''),
+         lyrics = str_split(lyrics, '", "')) %>%
+  unnest(lyrics) %>%
+  View()
 ```
 

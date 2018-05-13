@@ -3,6 +3,9 @@ from bs4 import BeautifulSoup
 import time
 import json
 import pandas as pd
+
+import pdb
+
 from genius_db import *
 
 
@@ -48,10 +51,14 @@ def scrape_song(url):
 
     # Remove style tags which create new stripped_strings
     invalid_tags = ['b', 'i', 'u']
+    pdb.set_trace()
     for tag in invalid_tags:
-        for match in lyrics_tag.findAll(tag):
-            match.replaceWithChildren()
+        for styled in lyrics_tag.findAll(tag):
+            styled = styled.replaceWithChildren()
+    pdb.set_trace()
 
+    # TODO: stripped_strings isn't using the new lyrics_tag that has no style tags
+    # case study: https://genius.com/Rick-ross-dead-presidents-lyrics
     lyrics = [lyric for lyric in lyrics_tag.stripped_strings]
 
     # Flatten metadata
@@ -103,7 +110,7 @@ def get_song_tags(song):
         tags = [x['value'] for x in song.get('tracking_data') if x['key'] == 'Tag']
     return tags
 
-# TODO: Add lyrics_created_at, lyrics_updated_at
+# TODO: Use the API to get metadata rather than scraping it
 def enrich_song_data(song_id):
     """
         Fetches additional data from the Genius API.
@@ -153,7 +160,7 @@ def scrape_artist_songs(artist_id):
             A list of dicts of song data for all songs by the artist.
     """
     songs = []
-    next_page = 1
+    next_page = 10
     while isinstance(next_page, int):
         print('*******************')
         print("Downloading page {0}".format(next_page))
@@ -163,7 +170,7 @@ def scrape_artist_songs(artist_id):
         result = r.json()
         next_page = result['response']['next_page']
         next_page = ''
-        for song in result['response']['songs'][5:8]:
+        for song in result['response']['songs'][:1]:
             lyric = scrape_song(song['url'])
             # Get release date
             # song_id = song['api_path'].replace('/songs/', '')
@@ -219,6 +226,8 @@ def scrape_album():
 def scrape_future():
     songs = scrape_artist_songs(2197)
     df = pd.DataFrame(songs)
+    df = df.set_index('song_id')
     engine = db_connect()
-    df.to_sql('songs', engine)
-    df.to_csv('data/future_sample.csv')
+    # TODO: How to handle pre-existing songs in the DB?
+    df.to_sql('songs_v1', engine, if_exists='append')
+    # df.to_csv('data/future_sample.csv')
