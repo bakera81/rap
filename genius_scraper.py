@@ -54,12 +54,32 @@ def scrape_song(url):
     pdb.set_trace()
     for tag in invalid_tags:
         for styled in lyrics_tag.findAll(tag):
-            styled = styled.replaceWithChildren()
-    pdb.set_trace()
+            # TODO: This is replacing the current tag with text, but not combining the content of two tags
+            # case study: https://genius.com/Rick-ross-dead-presidents-lyrics
+            # Add the string to the previous (or next) tag.
+            # styled.replaceWithChildren()
+            # This approach will work if I open and close the </br> tags
+            styled.parent.unwrap()
+
+    # loop over all tags
+    # Add the stripped string for each tag.
+    # if a style tag is found, add its contents to the previous tag.
+    # if there is no previous tag, add its contents to the next tag.
+
+    # loop over all tags
+    # get and strip the text of all of that tag's children.
+    lyrics = []
+    for tag in lyrics_tag.p.children:
+        if tag.name in invalid_tags:
+            # Add the tag's stripped text to the prevous tag's text.
+        else:
+            lyrics.append(tag.get_text(strip=True))
+
+
 
     # TODO: stripped_strings isn't using the new lyrics_tag that has no style tags
-    # case study: https://genius.com/Rick-ross-dead-presidents-lyrics
     lyrics = [lyric for lyric in lyrics_tag.stripped_strings]
+
 
     # Flatten metadata
     # TODO: What happens if there are duplicate keys?
