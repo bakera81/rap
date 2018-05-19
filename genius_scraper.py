@@ -1,5 +1,5 @@
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, element
 import time
 import json
 import pandas as pd
@@ -23,6 +23,7 @@ def scrape_song(url):
     print('Scraping ' + url)
     r = requests.get(url)
     soup = BeautifulSoup(r.text, 'html.parser')
+    soup = BeautifulSoup(r.text, 'html5lib')
 
     # Assumption: all songs have this class
     header = soup.find('div', class_='header_with_cover_art')
@@ -49,36 +50,20 @@ def scrape_song(url):
     # Assumption: All lyrics are in a <div class="lyrics">
     lyrics_tag = soup.find('div', class_='lyrics')
 
-    # Remove style tags which create new stripped_strings
-    invalid_tags = ['b', 'i', 'u']
-    pdb.set_trace()
-    for tag in invalid_tags:
-        for styled in lyrics_tag.findAll(tag):
-            # TODO: This is replacing the current tag with text, but not combining the content of two tags
-            # case study: https://genius.com/Rick-ross-dead-presidents-lyrics
-            # Add the string to the previous (or next) tag.
-            # styled.replaceWithChildren()
-            # This approach will work if I open and close the </br> tags
-            styled.parent.unwrap()
-
-    # loop over all tags
-    # Add the stripped string for each tag.
-    # if a style tag is found, add its contents to the previous tag.
-    # if there is no previous tag, add its contents to the next tag.
-
-    # loop over all tags
-    # get and strip the text of all of that tag's children.
     lyrics = []
+    bar = ''
+    # Assumption: All lyrics are inside a <p>
+    # Do not create a new item in lyrics for italicized text:
     for tag in lyrics_tag.p.children:
-        if tag.name in invalid_tags:
-            # Add the tag's stripped text to the prevous tag's text.
+        if type(tag) is element.NavigableString:
+            bar += tag
+        elif tag.name != 'br':
+            bar += tag.get_text(strip=True)
         else:
-            lyrics.append(tag.get_text(strip=True))
+            lyrics.append(bar.strip())
+            bar = ''
 
-
-
-    # TODO: stripped_strings isn't using the new lyrics_tag that has no style tags
-    lyrics = [lyric for lyric in lyrics_tag.stripped_strings]
+    # lyrics = [lyric for lyric in lyrics_tag.stripped_strings]
 
 
     # Flatten metadata
