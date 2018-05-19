@@ -163,7 +163,7 @@ def enrich_song_data(song_id):
         'lyrics_updated_at': song.get('lyrics_updated_at'),
         'lyrics_state': song.get('lyrics_state'),
         'tags': json.dumps(get_song_tags(song)),
-        'featured_artist_ids': featured_artist_ids
+        'featured_artist_ids': json.dumps(featured_artist_ids)
     }
 
     return data
@@ -181,7 +181,7 @@ def scrape_artist_songs(artist_id):
             A list of dicts of song data for all songs by the artist.
     """
     songs = []
-    next_page = 10
+    next_page = 1
     while isinstance(next_page, int):
         print('*******************')
         print("Downloading page {0}".format(next_page))
@@ -190,8 +190,8 @@ def scrape_artist_songs(artist_id):
         r = requests.get(url)
         result = r.json()
         next_page = result['response']['next_page']
-        next_page = ''
-        for song in result['response']['songs'][:10]:
+        # next_page = ''
+        for song in result['response']['songs']:
             lyric = scrape_song(song['url'])
             # Get release date
             # song_id = song['api_path'].replace('/songs/', '')
@@ -227,14 +227,19 @@ def api_artist_songs(artist_id):
     return songs
 
 
-def scrape_artist(url):
-    pass
+def scrape_artist(id):
+    engine = db_connect()
+    songs = scrape_artist_songs(2197)
 
 
 def scrape_album():
     pass
 
 
+def to_df(songs):
+    df = pd.DataFrame(songs)
+    df = df.set_index('song_id')
+    return df
 # songs = api_artist_songs(2197)
 # # titles = [s['title'] for s in songs]
 # song_urls = [s['url'] for s in songs]
@@ -251,5 +256,5 @@ def scrape_future():
     return df
     # engine = db_connect()
     # # TODO: How to handle pre-existing songs in the DB?
-    # df.to_sql('songs_v1', engine, if_exists='append')
+    # df.to_sql('songs_v3', engine, if_exists='append')
     # df.to_csv('data/future_sample.csv')

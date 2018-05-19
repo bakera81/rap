@@ -106,7 +106,7 @@ con <- dbConnect(RMariaDB::MariaDB(),
                  dbname = creds$database)
 dbListTables(con)
 
-res <- dbSendQuery(con, "SELECT * FROM songs_v1")
+res <- dbSendQuery(con, "SELECT * FROM songs_v2")
 songs <- dbFetch(res)
 dbClearResult(res)
 ```

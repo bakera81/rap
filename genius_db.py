@@ -31,35 +31,63 @@ def db_connect(echo=True):
     engine = create_engine(engine_config, echo=echo)
     return engine
 
+
+def to_db(engine, df, tablename='songs_v3'):
+    df.to_sql('songs_v3', engine, if_exists='append')
+
+
 Base = declarative_base()
 # Store JSON as JSON? Arrays as Arrays?
 class Song(Base):
-    __tablename__ = 'songs_v1'
+    __tablename__ = 'songs_v3'
+
+    # song_id = Column(Integer, primary_key=True)
+    # title = Column(String(255))
+    # title_with_featured = Column(String(255))
+    # release_date = Column(DateTime)
+    # url = Column(String(255))
+    # published = Column(Boolean)
+    # tags = Column(Text)
+    # recording_location = Column(String(255))
+    # artist = Column(String(255))
+    # primary_artist_id = Column(Integer)
+    # artist_url = Column(String(255))
+    # featured_artist_ids = Column(Text)
+    # featuring = Column(Text)
+    # album_id = Column(Integer)
+    # album__href = Column(String(255))
+    # album__text = Column(String(255))
+    # produced_by__href = Column(String(255))
+    # produced_by__text = Column(String(255))
+    # lyrics_language = Column(String(16))
+    # lyrics_created_at = Column(DateTime)
+    # lyrics_updated_at = Column(DateTime)
+    # lyrics_state = Column(String(255))
+    # lyrics = Column(Text)
 
     song_id = Column(Integer, primary_key=True)
-    title = Column(String(255))
-    title_with_featured = Column(String(255))
-    release_date = Column(DateTime)
-    url = Column(String(255))
-    published = Column(Boolean)
-    tags = Column(Text)
-    recording_location = Column(String(255))
+    album_artist_id = Column(Integer)
+    album_href = Column(String(255))
+    album_id = Column(Integer)
+    album_title = Column(String(255))
     artist = Column(String(255))
-    primary_artist_id = Column(Integer)
     artist_url = Column(String(255))
     featured_artist_ids = Column(Text)
-    featuring__href = Column(String(255))
-    featuring__text = Column(String(255))
-    album_id = Column(Integer)
-    album__href = Column(String(255))
-    album__text = Column(String(255))
-    produced_by__href = Column(String(255))
-    produced_by__text = Column(String(255))
-    lyrics_language = Column(String(16))
-    lyrics_created_at = Column(DateTime)
-    lyrics_updated_at = Column(DateTime)
-    lyrics_state = Column(String(255))
+    featuring = Column(Text)
     lyrics = Column(Text)
+    lyrics_created_at = Column(DateTime)
+    lyrics_language = Column(String(16))
+    lyrics_state = Column(String(255))
+    lyrics_updated_at = Column(DateTime)
+    primary_artist_id = Column(Integer)
+    produced_by = Column(Text)
+    published = Column(Boolean)
+    recording_location = Column(String(255))
+    release_date = Column(DateTime)
+    tags = Column(Text)
+    title = Column(String(255))
+    title_with_featured = Column(String(255))
+    url = Column(String(255))
 
     def __repr__(self):
         return "<Song(song_id='{0}', title='{1}', url='{2}')>".format(
