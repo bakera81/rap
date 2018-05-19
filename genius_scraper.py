@@ -37,16 +37,6 @@ def scrape_song(url):
     artist = artist_tag.text.strip()
     artist_url = artist_tag.a.get('href')
 
-    # Assumption: All metadata is in divs with class="metadata_unit-*"
-    # Assumption: All metadata info is contained in <a>
-    metadata = {}
-    for md in header.find_all('div', class_='metadata_unit'):
-        label = md.find('span', class_='metadata_unit-label')
-        info = md.find('span', class_='metadata_unit-info')
-        for a in info.find_all('a'):
-            metadata['{}__text'.format(label.text.replace(' ', '_')).lower()] = a.text.strip()
-            metadata['{}__href'.format(label.text.replace(' ', '_')).lower()] = a.get('href')
-
     # Assumption: All lyrics are in a <div class="lyrics">
     lyrics_tag = soup.find('div', class_='lyrics')
 
@@ -65,11 +55,6 @@ def scrape_song(url):
 
     # lyrics = [lyric for lyric in lyrics_tag.stripped_strings]
 
-
-    # Flatten metadata
-    # TODO: What happens if there are duplicate keys?
-    # TODO: The URLs in metadata are weird and javascripty
-
     song = {
         'url': url,
         'title': title,
@@ -77,9 +62,6 @@ def scrape_song(url):
         'artist_url': artist_url,
         'lyrics': json.dumps(lyrics)
     }
-
-    song = {**song, **metadata}
-    # song.update(metadata)
 
     return song
 
@@ -115,7 +97,7 @@ def get_song_tags(song):
         tags = [x['value'] for x in song.get('tracking_data') if x['key'] == 'Tag']
     return tags
 
-# TODO: Use the API to get metadata rather than scraping it
+
 def enrich_song_data(song_id):
     """
         Fetches additional data from the Genius API.
@@ -132,16 +114,50 @@ def enrich_song_data(song_id):
     song = r.json().get('response').get('song')
     # tags = [x['value'] for x in song.get('tracking_data') if x['key'] == 'Tag']
 
+    album = song.get('album')
+    if album:
+        album_id = album.get('id')
+        album_title = album.get('name')
+        album_artist_id = album.get('artist').get('id') if album.get('artist') else None
+        album_href = album.get('url')
+    else:
+        album_id, album_title, album_artist_id, album_href = None, None, None, None
+
+    prod_artists = song.get('producer_artists')
+    if prod_artists:
+        producers = [
+            { 'producer_id': p.get('id'),
+              'title': p.get('name'),
+              'href': p.get('url')
+             } for p in prod_artists]
+    else:
+        producers = None
+
+    feat_artists = song.get('featured_artists')
+    if feat_artists:
+        featuring = [
+            { 'artist_id': f.get('id'),
+              'artist': f.get('name'),
+              'href': f.get('url')
+             } for f in feat_artists]
+        featured_artist_ids = [x.get('id') for x in feat_artists]
+    else:
+        featuring, featured_artist_ids = None, None
+
     language = [x['value'] for x in song.get('tracking_data') if x['key'] == 'Lyrics Language'][0]
-    featured_artist_ids = [x['id'] for x in song.get('featured_artists')]
     lyrics_created_at = [x['value'] for x in song.get('tracking_data') if x['key'] == 'created_at'][0]
-    album_id = song.get('album').get('id') if song.get('album') else None
+
     data = {
+        'album_id': album_id,
+        'album_title': album_title,
+        'album_artist_id': album_artist_id,
+        'album_href': album_href,
+        'produced_by': json.dumps(producers),
+        'featuring': json.dumps(featuring),
         'release_date': song.get('release_date'),
         'published': song.get('published'),
         'recording_location': song.get('recording_location'),
         'title_with_featured': song.get('title_with_featured'),
-        'album_id': album_id,
         'lyrics_language': language,
         'lyrics_created_at': lyrics_created_at,
         'lyrics_updated_at': song.get('lyrics_updated_at'),
@@ -175,7 +191,7 @@ def scrape_artist_songs(artist_id):
         result = r.json()
         next_page = result['response']['next_page']
         next_page = ''
-        for song in result['response']['songs'][:1]:
+        for song in result['response']['songs'][:10]:
             lyric = scrape_song(song['url'])
             # Get release date
             # song_id = song['api_path'].replace('/songs/', '')
@@ -232,7 +248,8 @@ def scrape_future():
     songs = scrape_artist_songs(2197)
     df = pd.DataFrame(songs)
     df = df.set_index('song_id')
-    engine = db_connect()
-    # TODO: How to handle pre-existing songs in the DB?
-    df.to_sql('songs_v1', engine, if_exists='append')
+    return df
+    # engine = db_connect()
+    # # TODO: How to handle pre-existing songs in the DB?
+    # df.to_sql('songs_v1', engine, if_exists='append')
     # df.to_csv('data/future_sample.csv')
