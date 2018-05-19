@@ -33,7 +33,7 @@ def db_connect(echo=True):
 
 
 def to_db(engine, df, tablename='songs_v3'):
-    df.to_sql('songs_v3', engine, if_exists='append')
+    df.to_sql('songs_v3', engine, if_exists='append', chunksize=30)
 
 
 Base = declarative_base()

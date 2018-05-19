@@ -43,15 +43,18 @@ def scrape_song(url):
     lyrics = []
     bar = ''
     # Assumption: All lyrics are inside a <p>
-    # Do not create a new item in lyrics for italicized text:
-    for tag in lyrics_tag.p.children:
-        if type(tag) is element.NavigableString:
-            bar += tag
-        elif tag.name != 'br':
-            bar += tag.get_text(strip=True)
-        else:
-            lyrics.append(bar.strip())
-            bar = ''
+    if lyrics_tag.p:
+        # Do not create a new item in lyrics for italicized text:
+        for tag in lyrics_tag.p.children:
+            if type(tag) is element.NavigableString:
+                bar += tag
+            elif tag.name != 'br':
+                bar += tag.get_text(strip=True)
+            else:
+                lyrics.append(bar.strip())
+                bar = ''
+    else:
+        return None
 
     # lyrics = [lyric for lyric in lyrics_tag.stripped_strings]
 
@@ -193,6 +196,9 @@ def scrape_artist_songs(artist_id):
         # next_page = ''
         for song in result['response']['songs']:
             lyric = scrape_song(song['url'])
+            # If a song has no lyrics, skip it
+            if not lyric:
+                continue
             # Get release date
             # song_id = song['api_path'].replace('/songs/', '')
             # song_id = song['id']
