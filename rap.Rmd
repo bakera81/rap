@@ -13,6 +13,7 @@ library(tidyverse)
 library(jsonlite)
 library(DBI)
 library(yaml)
+library(tidytext)
 ```
 
 ```{r}
@@ -84,19 +85,6 @@ future_tags %>%
 ```
 
 ```{r}
-future %>%
-  select(-tags) %>%
-  distinct(song_id, .keep_all = T) %>%
-  mutate(lyrics = str_replace(lyrics, '^\\[', ''),
-         lyrics = str_replace(lyrics, '\\]$', ''),
-         lyrics = str_replace_all(lyrics, '"', ''),
-         lyrics = str_split(lyrics, ', ')) %>%
-  unnest(lyrics) %>%
-  View()
-# Ready for tidytext!
-```
-
-```{r}
 # Read from the DB!
 creds = read_yaml("db/genius_db.yml")
 con <- dbConnect(RMariaDB::MariaDB(), 
@@ -109,6 +97,46 @@ dbListTables(con)
 res <- dbSendQuery(con, "SELECT * FROM songs_v3")
 songs <- dbFetch(res)
 dbClearResult(res)
+```
+
+```{r}
+# Look at lyrics by line
+songs %>%
+  select(song_id, primary_artist_id, title, url, lyrics) %>%
+  distinct(song_id, .keep_all = T) %>%
+  mutate(lyrics = str_replace(lyrics, '^\\[', ''),
+         lyrics = str_replace(lyrics, '\\]$', ''),
+         lyrics = str_replace_all(lyrics, '"', ''),
+         lyrics = str_split(lyrics, ', ')) %>%
+  unnest(lyrics) %>%
+  View()
+```
+
+```{r}
+# Look at lyrics by word
+future_words <- songs %>%
+  select(song_id, primary_artist_id, title, url, lyrics) %>%
+  distinct(song_id, .keep_all = T) %>%
+  mutate(lyrics = str_replace(lyrics, '^\\[', ''),
+         lyrics = str_replace(lyrics, '\\]$', ''),
+         lyrics = str_replace_all(lyrics, '"', ''),
+         lyrics = str_split(lyrics, ', | ')) %>%
+  unnest(lyrics) %>%
+  rename(word = lyrics)
+
+data(stop_words)
+
+future_words <- future_words %>%
+  mutate(word = tolower(word)) %>%
+  anti_join(stop_words, by = "word") %>%
+  filter(!str_detect(word, '\\[|\\]'))
+
+future_words %>%
+  count(word, sort = T)
+```
+
+```{r}
+# TODO: user the [Verse n: artist] tags to separate the verses
 ```
 
 ```{r}
