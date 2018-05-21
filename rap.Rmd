@@ -14,78 +14,11 @@ library(jsonlite)
 library(DBI)
 library(yaml)
 library(tidytext)
+library(lubridate)
 ```
 
 ```{r}
-# Read Data
-future_raw <- readr::read_csv("data/future_sample.csv") %>%
-  select(-X1)
-
-future_raw %>%
-  select(song_id,
-         title, 
-         title_with_featured,
-         release_date,
-         url, 
-         published,
-         tags,
-         recording_location,
-         artist,
-         primary_artist_id,
-         artist_url,
-         featured_artist_ids,
-         featuring__href,
-         featuring__text,
-         album_id,
-         album__href,
-         album__text,
-         produced_by__href,
-         produced_by__text,
-         lyrics_language,
-         lyrics_created_at,
-         lyrics_updated_at,
-         lyrics_state,
-         lyrics) %>%
-  names() %>% length()
-```
-
-```{r}
-# Inspect & Clean
-future_raw %>%
-  nrow()
-
-future_raw %>% 
-  filter(primary_artist_id == 2197) %>%
-  nrow()
-
-future_raw %>% 
-  count(primary_artist_id, sort = T)
-
-future_raw %>% 
-  count(lyrics_language, sort = T)
-
-future_raw %>% 
-  count(published, sort = T)
-
-future <- future_raw %>%
-  filter(lyrics_language == "en",
-         primary_artist_id == 2197)
-```
-
-```{r}
-# Unnest Tags
-future_tags <- future %>%
-  mutate(tags = str_remove_all(tags, "'"),
-         tags = str_remove_all(tags, "(\\[|\\])"),
-         tags = str_split(tags, ", ")) %>%
-  unnest(tags)
-  
-future_tags %>%
-  count(tags, sort = T)
-```
-
-```{r}
-# Read from the DB!
+# Read from the DB
 creds = read_yaml("db/genius_db.yml")
 con <- dbConnect(RMariaDB::MariaDB(), 
                  username = creds$username,
@@ -95,44 +28,114 @@ con <- dbConnect(RMariaDB::MariaDB(),
 dbListTables(con)
 
 res <- dbSendQuery(con, "SELECT * FROM songs_v3")
+
 songs <- dbFetch(res)
 dbClearResult(res)
 ```
 
 ```{r}
+# Inspect
+future <- songs
+
+# How many songs?
+future %>%
+  nrow()
+
+# How many of the songs are Future's?
+future %>% 
+  filter(primary_artist_id == 2197) %>%
+  nrow()
+
+future %>% 
+  pull(song_id) %>%
+  anyDuplicated()
+
+future %>% 
+  count(lyrics_language, sort = T)
+
+future %>% 
+  count(published, sort = T)
+
+```
+
+
+```{r}
 # Look at lyrics by line
-songs %>%
-  select(song_id, primary_artist_id, title, url, lyrics) %>%
-  distinct(song_id, .keep_all = T) %>%
-  mutate(lyrics = str_replace(lyrics, '^\\[', ''),
-         lyrics = str_replace(lyrics, '\\]$', ''),
-         lyrics = str_replace_all(lyrics, '"', ''),
-         lyrics = str_split(lyrics, ', ')) %>%
+future_lyrics <- future %>%
+  select(song_id, primary_artist_id, title, url, release_date, lyrics) %>%
+  mutate(release_Date = as.Date(release_date),
+         lyrics = str_replace(lyrics, '^\\[', ''), # Remove opening bracket in list
+         lyrics = str_replace(lyrics, '\\]$', ''), # Remove closing bracket in list
+         lyrics = str_replace_all(lyrics, '"', ''), # Remove quotes
+         lyrics = str_split(lyrics, ', ')) %>% # TODO: This splits lines if they contain a comma
   unnest(lyrics) %>%
-  View()
+  filter(lyrics != '') %>% # Don't include newlines
+  # Create a verse artist column to distinguish who is rapping
+  mutate(verse_artist = ifelse(str_detect(lyrics, '^\\[.*\\]$'), # Look for [Verse n: Artist]
+                               lyrics,
+                               NA),
+         verse_artist = str_replace_all(verse_artist, '(^+*: )|(\\])', '')) %>% # Isolate the artist name
+  # Expand verse_artist for all relevant rows 
+  fill(verse_artist) %>%
+  # Exclude the verse signifiers
+  filter(!str_detect(lyrics, '^\\[.*\\]$'))
+
+future_lyrics %>% 
+  distinct(song_id, verse_artist) %>%
+  count(verse_artist, sort = T)
 ```
 
 ```{r}
-# Look at lyrics by word
-future_words <- songs %>%
-  select(song_id, primary_artist_id, title, url, lyrics) %>%
-  distinct(song_id, .keep_all = T) %>%
-  mutate(lyrics = str_replace(lyrics, '^\\[', ''),
-         lyrics = str_replace(lyrics, '\\]$', ''),
-         lyrics = str_replace_all(lyrics, '"', ''),
-         lyrics = str_split(lyrics, ', | ')) %>%
-  unnest(lyrics) %>%
-  rename(word = lyrics)
+# DEBUGGING: need better parsing for verse artist
+test <- songs %>%
+  filter(song_id == 3536550) 
 
+test %>% 
+  select(song_id, primary_artist_id, title, url, release_date, lyrics) %>%
+  mutate(release_Date = as.Date(release_date),
+         lyrics = str_replace(lyrics, '^\\[', ''), # Remove opening bracket in list
+         lyrics = str_replace(lyrics, '\\]$', ''), # Remove closing bracket in list
+         lyrics = str_replace_all(lyrics, '"', ''), # Remove quotes
+         lyrics = str_split(lyrics, ', ')) %>% # TODO: This splits lines if they contain a comma
+  unnest(lyrics) %>%
+  filter(lyrics != '') %>% # Don't include newlines
+  # Create a verse artist column to distinguish who is rapping
+  mutate(verse_artist = ifelse(str_detect(lyrics, '^\\[.*\\]$'), # Look for [Verse n: Artist]
+                               lyrics,
+                               NA),
+         # TODO: Make sure the verse artist contains :
+         verse_artist = ifelse(str_detect(lyrics, ': '),
+                               str_replace_all(verse_artist, '(^.*: )|(\\])', ''),
+                               NA)) %>% # Isolate the artist name
+  # Expand verse_artist for all relevant rows 
+  fill(verse_artist) %>%
+  View()
+
+# TODO: set verse_artist to NA if the artist isn't specified in the verse
+```
+
+
+```{r}
+# Look at lyrics by word
 data(stop_words)
 
-future_words <- future_words %>%
-  mutate(word = tolower(word)) %>%
-  anti_join(stop_words, by = "word") %>%
-  filter(!str_detect(word, '\\[|\\]'))
+future_words <- future_lyrics %>% 
+  unnest_tokens(word, lyrics) %>%
+  anti_join(stop_words, by = "word")
+
+
 
 future_words %>%
-  count(word, sort = T)
+  count(word, sort = T) %>%
+  View()
+
+future_words %>%
+  filter(!is.na(month)) %>%
+  count(month = floor_date(release_date, "month")) %>%
+  ungroup() %>%
+  ggplot(aes(month, n, color = word)) + 
+  geom_line()
+
 ```
 
 ```{r}
@@ -150,3 +153,12 @@ songs %>%
   View()
 ```
 
+### Questions
+0. Most frequent collaborators?
+0A. Most frequent producers?
+1. All time, most frequent words?
+1A. Most frequent words over time?
+1B. Most frequent words on his own songs vs guest verses?
+2. Range of vocab?
+3. Sentiment
+4. Favorite drug?

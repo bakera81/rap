@@ -1,0 +1,173 @@
+---
+title: "Rap Lyric Sentiment Analysis"
+author: "Anthony Baker"
+date: "5/7/2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(jsonlite)
+library(DBI)
+library(yaml)
+library(tidytext)
+library(lubridate)
+```
+
+```{r}
+# Read Data
+future_raw <- readr::read_csv("data/future_sample.csv") %>%
+  select(-X1)
+
+future_raw %>%
+  select(song_id,
+         title, 
+         title_with_featured,
+         release_date,
+         url, 
+         published,
+         tags,
+         recording_location,
+         artist,
+         primary_artist_id,
+         artist_url,
+         featured_artist_ids,
+         featuring__href,
+         featuring__text,
+         album_id,
+         album__href,
+         album__text,
+         produced_by__href,
+         produced_by__text,
+         lyrics_language,
+         lyrics_created_at,
+         lyrics_updated_at,
+         lyrics_state,
+         lyrics) %>%
+  names() %>% length()
+```
+
+```{r}
+# Inspect & Clean
+future_raw %>%
+  nrow()
+
+future_raw %>% 
+  filter(primary_artist_id == 2197) %>%
+  nrow()
+
+future_raw %>% 
+  count(primary_artist_id, sort = T)
+
+future_raw %>% 
+  count(lyrics_language, sort = T)
+
+future_raw %>% 
+  count(published, sort = T)
+
+future <- future_raw %>%
+  filter(lyrics_language == "en",
+         primary_artist_id == 2197)
+```
+
+```{r}
+# Unnest Tags
+future_tags <- future %>%
+  mutate(tags = str_remove_all(tags, "'"),
+         tags = str_remove_all(tags, "(\\[|\\])"),
+         tags = str_split(tags, ", ")) %>%
+  unnest(tags)
+  
+future_tags %>%
+  count(tags, sort = T)
+```
+
+```{r}
+# Read from the DB!
+creds = read_yaml("db/genius_db.yml")
+con <- dbConnect(RMariaDB::MariaDB(), 
+                 username = creds$username,
+                 password = creds$password,
+                 host = creds$host,
+                 dbname = creds$database)
+dbListTables(con)
+
+res <- dbSendQuery(con, "SELECT * FROM songs_v3")
+
+songs <- dbFetch(res)
+dbClearResult(res)
+```
+
+```{r}
+# Look at lyrics by line
+songs %>%
+  select(song_id, primary_artist_id, title, url, lyrics) %>%
+  distinct(song_id, .keep_all = T) %>%
+  mutate(lyrics = str_replace(lyrics, '^\\[', ''),
+         lyrics = str_replace(lyrics, '\\]$', ''),
+         lyrics = str_replace_all(lyrics, '"', ''),
+         lyrics = str_split(lyrics, ', ')) %>%
+  unnest(lyrics) %>%
+  filter(lyrics != '') %>%
+  mutate(verse_artist = ifelse(str_detect(lyrics, '^\\[.*\\]$'),
+                               lyrics,
+                               NA),
+         verse_artist = str_replace_all(verse_artist, '(^.*: )|(\\])', '')) %>%
+  # Expand verse_artist for all relevant rows 
+  fill(verse_artist) %>%
+  # Exclude the verse signifiers
+  filter(!str_detect(lyrics, '^\\[.*\\]$')) %>%
+  View()
+```
+
+```{r}
+# Look at lyrics by word
+future_words <- songs %>%
+  select(song_id, primary_artist_id, title, url, release_date, lyrics) %>%
+  distinct(song_id, .keep_all = T) %>%
+  mutate(lyrics = str_replace(lyrics, '^\\[', ''),
+         lyrics = str_replace(lyrics, '\\]$', ''),
+         lyrics = str_replace_all(lyrics, '"', ''),
+         lyrics = str_split(lyrics, ', | ')) %>%
+  unnest(lyrics) %>%
+  rename(word = lyrics)
+
+data(stop_words)
+
+future_words <- future_words %>%
+  mutate(word = tolower(word),
+         release_date = as.Date(release_date)) %>%
+  anti_join(stop_words, by = "word") %>%
+  filter(!str_detect(word, '\\[|\\]'))
+
+future_words %>%
+  count(word, sort = T) %>%
+  View()
+
+future_words %>%
+  filter(!is.na(month)) %>%
+  count(month = floor_date(release_date, "month")) %>%
+  ungroup() %>%
+  ggplot(aes(month, n, color = word)) + 
+  geom_line()
+
+```
+
+```{r}
+# TODO: user the [Verse n: artist] tags to separate the verses
+```
+
+```{r}
+songs %>%
+  # TODO: Are lyric lines being split properly?
+  mutate(lyrics = str_replace(lyrics, '^\\[', ''),
+         lyrics = str_replace(lyrics, '\\]$', ''),
+         # lyrics = str_replace_all(lyrics, '"', ''),
+         lyrics = str_split(lyrics, '", "')) %>%
+  unnest(lyrics) %>%
+  View()
+```
+
