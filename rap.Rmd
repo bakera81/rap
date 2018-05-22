@@ -63,7 +63,7 @@ future %>%
 # Look at lyrics by line
 future_lyrics <- future %>%
   select(song_id, primary_artist_id, title, url, release_date, lyrics) %>%
-  mutate(release_Date = as.Date(release_date),
+  mutate(release_date = as.Date(release_date),
          lyrics = str_replace(lyrics, '^\\[', ''), # Remove opening bracket in list
          lyrics = str_replace(lyrics, '\\]$', ''), # Remove closing bracket in list
          lyrics = str_replace_all(lyrics, '"', ''), # Remove quotes
@@ -74,46 +74,22 @@ future_lyrics <- future %>%
   mutate(verse_artist = ifelse(str_detect(lyrics, '^\\[.*\\]$'), # Look for [Verse n: Artist]
                                lyrics,
                                NA),
-         verse_artist = str_replace_all(verse_artist, '(^+*: )|(\\])', '')) %>% # Isolate the artist name
-  # Expand verse_artist for all relevant rows 
-  fill(verse_artist) %>%
-  # Exclude the verse signifiers
-  filter(!str_detect(lyrics, '^\\[.*\\]$'))
-
-future_lyrics %>% 
-  distinct(song_id, verse_artist) %>%
-  count(verse_artist, sort = T)
-```
-
-```{r}
-# DEBUGGING: need better parsing for verse artist
-test <- songs %>%
-  filter(song_id == 3536550) 
-
-test %>% 
-  select(song_id, primary_artist_id, title, url, release_date, lyrics) %>%
-  mutate(release_Date = as.Date(release_date),
-         lyrics = str_replace(lyrics, '^\\[', ''), # Remove opening bracket in list
-         lyrics = str_replace(lyrics, '\\]$', ''), # Remove closing bracket in list
-         lyrics = str_replace_all(lyrics, '"', ''), # Remove quotes
-         lyrics = str_split(lyrics, ', ')) %>% # TODO: This splits lines if they contain a comma
-  unnest(lyrics) %>%
-  filter(lyrics != '') %>% # Don't include newlines
-  # Create a verse artist column to distinguish who is rapping
-  mutate(verse_artist = ifelse(str_detect(lyrics, '^\\[.*\\]$'), # Look for [Verse n: Artist]
-                               lyrics,
-                               NA),
-         # TODO: Make sure the verse artist contains :
          verse_artist = ifelse(str_detect(lyrics, ': '),
                                str_replace_all(verse_artist, '(^.*: )|(\\])', ''),
                                NA)) %>% # Isolate the artist name
   # Expand verse_artist for all relevant rows 
   fill(verse_artist) %>%
-  View()
-
-# TODO: set verse_artist to NA if the artist isn't specified in the verse
+  # Exclude the verse signifiers
+  filter(!str_detect(lyrics, '^\\[.*\\]$'))
 ```
 
+```{r}
+# Who are all the artists who contribute a verse in a song that Future is also on?
+future_lyrics %>% 
+  distinct(song_id, verse_artist) %>%
+  count(verse_artist, sort = T) %>%
+  View()
+```
 
 ```{r}
 # Look at lyrics by word
@@ -123,18 +99,29 @@ future_words <- future_lyrics %>%
   unnest_tokens(word, lyrics) %>%
   anti_join(stop_words, by = "word")
 
+top_words <- future_words %>%
+  count(word, sort = T)
 
-
-future_words %>%
-  count(word, sort = T) %>%
+top_words %>%
   View()
 
+# TODO: Fix character encodings
+```
+
+```{r}
+library(ggridges)
+
 future_words %>%
-  filter(!is.na(month)) %>%
-  count(month = floor_date(release_date, "month")) %>%
-  ungroup() %>%
-  ggplot(aes(month, n, color = word)) + 
-  geom_line()
+  filter(!is.na(release_date),
+         release_date >= "2009-01-01") %>%
+  inner_join(top_words %>% 
+               top_n(20, wt = n),
+             by = "word") %>%
+  mutate(month = floor_date(release_date, "month")) %>%
+  # count(month = floor_date(release_date, "month"), word) %>%
+  # ungroup() %>%
+  ggplot(aes(month, word)) + 
+  geom_density_ridges()
 
 ```
 
