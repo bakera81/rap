@@ -108,6 +108,44 @@ top_words %>%
 ```
 
 ```{r}
+# Words over time
+all_months <- seq.Date(as.Date("2008-03-01"), as.Date("2018-04-01"), by = "month")
+all_years <-  seq.Date(as.Date("2008-01-01"), as.Date("2018-01-01"), by = "year")
+
+all_words <- future_words %>%
+  distinct(word) %>%
+  crossing(all_years) %>%
+  rename(year = all_years)
+
+future_words_over_time <- all_words %>%
+  left_join(future_words %>%
+              filter(!is.na(release_date)) %>%
+              count(word, year = floor_date(release_date, "year")),
+            by = c("word", "year")) %>%
+  mutate(n = ifelse(is.na(n), 1, n), # To avoid NA/Inf errors
+         previous_n = lag(n),
+         change = (n - previous_n) / previous_n) %>%
+  group_by(word) %>%
+  mutate(mean_abs_change = mean(abs(change), na.rm = T)) %>%
+  ungroup()
+
+most_changed_words <- future_words_over_time %>%
+  distinct(word, mean_abs_change) %>%
+  top_n(20, wt = mean_abs_change)
+
+future_words_over_time %>%
+  inner_join(most_changed_words %>% select(word), by = "word") %>%
+  View()
+
+  
+  arrange(month) %>% View()
+  group_by(word) %>%
+  mutate(change = (n - lag(n))/lag(n)) %>%
+  ungroup() %>%
+  View()
+
+  
+
 library(ggridges)
 
 future_words %>%
