@@ -58,17 +58,16 @@ future %>%
 
 ```
 
-
 ```{r}
 # Look at lyrics by line
 future_lyrics <- future %>%
-  select(song_id, primary_artist_id, title, url, release_date, lyrics) %>%
+  # filter(song_id == 3304058) %>% 
+  select(song_id, primary_artist_id, title, url, release_date, lyrics_language, lyrics) %>%
   mutate(release_date = as.Date(release_date),
-         lyrics = str_replace(lyrics, '^\\[', ''), # Remove opening bracket in list
-         lyrics = str_replace(lyrics, '\\]$', ''), # Remove closing bracket in list
-         lyrics = str_replace_all(lyrics, '"', ''), # Remove quotes
-         lyrics = str_split(lyrics, ', ')) %>% # TODO: This splits lines if they contain a comma
-  unnest(lyrics) %>%
+         lyrics = str_replace(lyrics, '^\\["', ''), # Remove opening bracket in list
+         lyrics = str_replace(lyrics, '\\"]$', ''), # Remove closing bracket in list
+         lyrics = str_split(lyrics, '", "')) %>%
+  unnest(lyrics) %>% 
   filter(lyrics != '') %>% # Don't include newlines
   # Create a verse artist column to distinguish who is rapping
   mutate(verse_artist = ifelse(str_detect(lyrics, '^\\[.*\\]$'), # Look for [Verse n: Artist]
