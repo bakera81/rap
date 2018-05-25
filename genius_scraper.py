@@ -42,6 +42,8 @@ def scrape_song(url):
 
     lyrics = []
     bar = ''
+    # TODO: some line breaks are incorrect.
+    # Example: https://genius.com/Nerd-and-future-1000-lyrics
     # Assumption: All lyrics are inside a <p>
     if lyrics_tag.p:
         # Do not create a new item in lyrics for italicized text:
@@ -51,6 +53,7 @@ def scrape_song(url):
             elif tag.name != 'br':
                 bar += tag.get_text(strip=True)
             else:
+                # TODO: if the tag's children contain br, we should still split them
                 lyrics.append(bar.strip())
                 bar = ''
     else:
