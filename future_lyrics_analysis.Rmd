@@ -1,0 +1,159 @@
+---
+title: 'Future Hendrix: A Lyrical Analysis'
+author: "Anthony Baker"
+date: "5/28/2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# For data manipulation
+library(dplyr)
+library(lubridate)
+library(tidyr)
+# For text analysis
+library(tidytext)
+library(stringr)
+# For databse connections
+library(DBI)
+library(RMariaDB)
+library(yaml)
+# For API data formatting
+library(jsonlite)
+```
+
+```{r}
+# Read from the DB
+creds = read_yaml("db/genius_db.yml")
+con <- dbConnect(RMariaDB::MariaDB(), 
+                 username = creds$username,
+                 password = creds$password,
+                 host = creds$host,
+                 dbname = creds$database)
+dbListTables(con)
+
+res <- dbSendQuery(con, "SELECT * FROM songs_v3")
+
+songs <- dbFetch(res) %>%
+  as.tbl() %>%
+  mutate(primary_artist_id = as.integer(primary_artist_id))
+dbClearResult(res)
+```
+
+# Intro and Data Inspection
+I've set up a database that contains lyrics and additional metadata from all Future songs on Rap Genius. Future is `primary_artist_id == 2197`.
+
+```{r}
+# How many songs?
+songs %>% 
+  nrow()
+ # Any duplicates?
+songs %>% 
+  pull(song_id) %>%
+  anyDuplicated()
+```
+
+```{r}
+# How many languages?
+songs %>% 
+  count(lyrics_language, sort = T)
+```
+
+```{r}
+# How many different primary artists?
+songs %>% 
+  count(primary_artist_id, sort = T)
+```
+
+```{r}
+# How many songs are "published"?
+songs %>% 
+  count(published)
+```
+
+- There are `r songs %>% nrow()` songs in the dataset.
+- There are no duplicated songs in the dataset.
+- There are songs in 9 different languages, but `r round(843/866 * 100, 2)`% are in English.
+- Future is the primary artist on 407 songs, or `r round(407/866 * 100, 2)`% of the dataset. He is featured in the remaining 457 songs.
+- Only 57 of the songs are marked as officially "published" according to Genius.
+
+
+# Who are Future's collaborators?
+### Which artists' songs is Future most commonly featured on?
+```{r}
+# Which artists' songs is Future most commonly featured on?
+# Add artist name via the Genius API:
+add_artist_name <- function(artist_id){
+  names <- rep(NA, length(artist_id))
+  i <- 1
+  for(id in artist_id){
+    print(paste0("Fetching artist ", id))
+    artist <- fromJSON(paste0("https://genius.com/api/artists/", id))
+    names[i] <- artist$response$artist$name
+    i <- i + 1
+  }
+  names
+}
+
+songs %>%
+  filter(primary_artist_id != 2197) %>%
+  count(primary_artist_id, sort = T) %>%
+  head(10) %>%
+  mutate(primary_artist_id = as.integer(primary_artist_id),
+         name = add_artist_name(primary_artist_id))
+```
+
+### Which artists are most commonly featured on Future's songs?
+```{r}
+songs %>%
+  filter(primary_artist_id == 2197) %>%
+  select(featured_artist_ids) %>%
+  mutate(featured_artist_ids = str_replace_all(featured_artist_ids, '\\[', ''), # Remove opening bracket in list
+         featured_artist_ids = str_replace_all(featured_artist_ids, '\\]', ''), # Remove closing bracket in list
+         featured_artist_ids = str_split(featured_artist_ids, ", ")) %>%
+  unnest(featured_artist_ids) %>%
+  filter(featured_artist_ids != "null") %>%
+  count(featured_artist_ids, sort = T) %>%
+  head(10) %>%
+  mutate(name = add_artist_name(featured_artist_ids))
+```
+
+### Which artists are Future's most frequent collaborators, regardless of whose song it is?
+```{r}
+songs %>%
+  select(song_id, primary_artist_id, featured_artist_ids) %>%
+  mutate(featured_artist_ids = str_replace_all(featured_artist_ids, '\\[', ''), # Remove opening bracket in list
+         featured_artist_ids = str_replace_all(featured_artist_ids, '\\]', ''), # Remove closing bracket in list
+         featured_artist_ids = str_c(featured_artist_ids, ", ", primary_artist_id),
+         featured_artist_ids = str_split(featured_artist_ids, ", ")) %>%
+  unnest(featured_artist_ids) %>%
+  filter(featured_artist_ids != "null",
+         featured_artist_ids != 2197) %>%
+  distinct(song_id, featured_artist_ids) %>%
+  count(featured_artist_ids, sort = T) %>%
+  head(10) %>%
+  mutate(name = add_artist_name(featured_artist_ids))
+```
+
+### Which producers does Future work with most?
+```{r}
+songs %>% 
+  filter(primary_artist_id == 2197) %>%
+  # Some songs have multiple producers
+  mutate(produced_by_temp = str_split(produced_by, "\\},")) %>%
+  unnest(produced_by_temp) %>%
+  mutate(producer_name = str_match(produced_by_temp, '"title": "(.+)",')[,2]) %>%
+  select(song_id, produced_by, producer_name) %>%
+  filter(!is.na(producer_name)) %>%
+  distinct(song_id, producer_name) %>%
+  count(producer_name, sort = T) %>%
+  head(10)
+```
+
+
+***
+
+# What are the most commonly used words?
+
