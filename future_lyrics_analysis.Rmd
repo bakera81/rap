@@ -22,6 +22,8 @@ library(RMariaDB)
 library(yaml)
 # For API data formatting
 library(jsonlite)
+# For plotting
+library(ggplot2)
 ```
 
 ```{r}
@@ -32,7 +34,7 @@ con <- dbConnect(RMariaDB::MariaDB(),
                  password = creds$password,
                  host = creds$host,
                  dbname = creds$database)
-dbListTables(con)
+# dbListTables(con)
 
 res <- dbSendQuery(con, "SELECT * FROM songs_v3")
 
@@ -156,4 +158,81 @@ songs %>%
 ***
 
 # What are the most commonly used words?
+
+
+```{r}
+# Look at lyrics by line
+future_lyrics <- songs %>%
+  select(song_id, primary_artist_id, title, url, release_date, lyrics_language, lyrics) %>%
+  mutate(release_date = as.Date(release_date),
+         lyrics = str_replace(lyrics, '^\\["', ''), # Remove opening bracket in list
+         lyrics = str_replace(lyrics, '\\"]$', ''), # Remove closing bracket in list
+         lyrics = str_split(lyrics, '", "')) %>%
+  unnest(lyrics) %>% 
+  filter(lyrics != '') %>% # Don't include newlines
+  # Create a verse artist column to distinguish who is rapping
+  mutate(verse_artist = ifelse(str_detect(lyrics, '^\\[.*\\]$'), # Look for [Verse n: Artist]
+                               lyrics,
+                               NA),
+         verse_artist = ifelse(str_detect(lyrics, ': '),
+                               str_replace_all(verse_artist, '(^.*: )|(\\])', ''),
+                               NA)) %>% # Isolate the artist name
+  # Expand verse_artist for all relevant rows 
+  fill(verse_artist) %>%
+  # Exclude the verse signifiers
+  filter(!str_detect(lyrics, '^\\[.*\\]$'))
+```
+
+```{r}
+# Now that we have a `verse_artist`, let's look at who they are
+future_lyrics %>% 
+  distinct(song_id, verse_artist) %>%
+  count(verse_artist, sort = T) %>%
+  View()
+
+# We can see that sometimes the verse artist is actually multiple people,
+#   so when we filter by `verse_artist` we'll want to search for "future".
+```
+
+```{r}
+# Now that we have lyrics by line and verse, let's break it down by word:
+data("stop_words")
+
+future_words <- future_lyrics %>%
+  unnest_tokens(word, lyrics) %>%
+  anti_join(stop_words, by = "word")
+  
+
+future_words %>%
+  filter(str_detect(verse_artist, regex("future", ignore_case = T))) %>%
+  count(word, sort = T) %>% 
+  filter(n > 300) %>% 
+  ggplot(aes(reorder(word, n), n)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Future Hendrix's most frequently used words",
+       x = "word")
+```
+
+### How does Future's vocab selection compare to his collaborators?
+```{r}
+# TODO: Scrape all lyrics for Future's most frequent collaborators then do the comparison.
+future_words %>%
+  mutate(verse_artist_category = ifelse(
+    str_detect(verse_artist, regex("future", ignore_case = T)),
+    "Future",
+    "Other"
+  )) %>%
+  filter(!is.na(verse_artist_category)) %>%
+  count(verse_artist_category, word) %>%
+  group_by(verse_artist_category) %>%
+  mutate(proportion = n / sum(n)) %>%
+  select(-n) %>%
+  spread(verse_artist_category, proportion) %>%
+  # gather(artist, proportion, Future, Other) %>%
+  ggplot(aes(Other, Future, color = abs(Future - Other))) + 
+    geom_abline(color = "gray40", lty = 2) +
+    geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) + 
+    scale_color_gradient(limits = c(0, 0.001), low = "darkslategray4", high = "gray75")
+```
 

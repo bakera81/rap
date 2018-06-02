@@ -44,6 +44,7 @@ def scrape_song(url):
     bar = ''
     # TODO: some line breaks are incorrect.
     # Example: https://genius.com/Nerd-and-future-1000-lyrics
+    # TODO: Enforce utf-8. Fix \u2019 apostrophes
     # Assumption: All lyrics are inside a <p>
     if lyrics_tag.p:
         # Do not create a new item in lyrics for italicized text:

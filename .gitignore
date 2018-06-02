@@ -3,3 +3,4 @@ genius_credentials.yml
 .Rhistory
 __pycache__/
 /db/
+*.icloud
