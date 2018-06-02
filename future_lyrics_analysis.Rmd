@@ -163,7 +163,7 @@ songs %>%
 ```{r}
 # Look at lyrics by line
 future_lyrics <- songs %>%
-  select(song_id, primary_artist_id, title, url, release_date, lyrics_language, lyrics) %>%
+  select(song_id, primary_artist_id, title, url, album_id, album_title, release_date, lyrics_language, lyrics) %>%
   mutate(release_date = as.Date(release_date),
          lyrics = str_replace(lyrics, '^\\["', ''), # Remove opening bracket in list
          lyrics = str_replace(lyrics, '\\"]$', ''), # Remove closing bracket in list
@@ -202,9 +202,10 @@ future_words <- future_lyrics %>%
   unnest_tokens(word, lyrics) %>%
   anti_join(stop_words, by = "word")
   
+future_words_exclusive <- future_words %>%
+  filter(str_detect(verse_artist, regex("future", ignore_case = T)))
 
-future_words %>%
-  filter(str_detect(verse_artist, regex("future", ignore_case = T))) %>%
+future_words_exclusive %>%
   count(word, sort = T) %>% 
   filter(n > 300) %>% 
   ggplot(aes(reorder(word, n), n)) +
@@ -218,21 +219,50 @@ future_words %>%
 ```{r}
 # TODO: Scrape all lyrics for Future's most frequent collaborators then do the comparison.
 future_words %>%
+  filter(!is.na(verse_artist)) %>%
   mutate(verse_artist_category = ifelse(
     str_detect(verse_artist, regex("future", ignore_case = T)),
     "Future",
     "Other"
   )) %>%
-  filter(!is.na(verse_artist_category)) %>%
   count(verse_artist_category, word) %>%
   group_by(verse_artist_category) %>%
   mutate(proportion = n / sum(n)) %>%
   select(-n) %>%
   spread(verse_artist_category, proportion) %>%
-  # gather(artist, proportion, Future, Other) %>%
   ggplot(aes(Other, Future, color = abs(Future - Other))) + 
     geom_abline(color = "gray40", lty = 2) +
     geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) + 
     scale_color_gradient(limits = c(0, 0.001), low = "darkslategray4", high = "gray75")
+```
+
+```{r}
+# Happy words
+future_words_exclusive %>%
+  inner_join(get_sentiments("nrc") %>%
+               filter(sentiment == "joy"),
+             by = "word") %>%
+  count(word, sort = T)
+
+major_albums <- songs %>%
+  filter(!is.na(album_title),
+         !is.na(album_id)) %>%
+  distinct(song_id, .keep_all = T) %>%
+  count(album_id, album_title, sort = T) %>%
+  filter(n > 5) 
+
+# TODO hide legend
+future_words_exclusive %>%
+  # only include major albums
+  inner_join(major_albums %>% select(album_id),
+             by = "album_id") %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(song_id, title, album_title, sentiment) %>%
+  spread(sentiment, n, fill = 0L) %>%
+  mutate(sentiment = positive - negative) %>%
+  ggplot(aes(title, sentiment, fill = album_title)) +
+  geom_col() +
+  coord_flip() + 
+  facet_wrap(~album_title) 
 ```
 
