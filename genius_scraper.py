@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup, element
 import time
 import json
+import re
 import pandas as pd
 
 import pdb
@@ -55,7 +56,7 @@ def scrape_song(url):
                 bar += tag.get_text(strip=True)
             else:
                 # TODO: if the tag's children contain br, we should still split them
-                lyrics.append(bar.strip())
+                lyrics.append(re.sub(u"(\u2018|\u2019)", "'", bar.strip()))
                 bar = ''
     else:
         return None
@@ -124,7 +125,7 @@ def enrich_song_data(song_id):
     album = song.get('album')
     if album:
         album_id = album.get('id')
-        album_title = album.get('name')
+        album_title = album.get('name').strip()
         album_artist_id = album.get('artist').get('id') if album.get('artist') else None
         album_href = album.get('url')
     else:
@@ -134,7 +135,7 @@ def enrich_song_data(song_id):
     if prod_artists:
         producers = [
             { 'producer_id': p.get('id'),
-              'title': p.get('name'),
+              'title': p.get('name').strip(),
               'href': p.get('url')
              } for p in prod_artists]
     else:
@@ -144,7 +145,7 @@ def enrich_song_data(song_id):
     if feat_artists:
         featuring = [
             { 'artist_id': f.get('id'),
-              'artist': f.get('name'),
+              'artist': f.get('name').strip(),
               'href': f.get('url')
              } for f in feat_artists]
         featured_artist_ids = [x.get('id') for x in feat_artists]
