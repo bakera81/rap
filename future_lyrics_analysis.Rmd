@@ -24,6 +24,7 @@ library(yaml)
 library(jsonlite)
 # For plotting
 library(ggplot2)
+library(scales)
 ```
 
 ```{r}
@@ -249,7 +250,9 @@ major_albums <- songs %>%
          !is.na(album_id)) %>%
   distinct(song_id, .keep_all = T) %>%
   count(album_id, album_title, sort = T) %>%
-  filter(n > 5) 
+  filter(n > 5) %>%
+  # manually filter a lil more
+  filter(!album_id %in% c(22223, 295414, 295459))
 
 # TODO hide legend
 future_words_exclusive %>%
