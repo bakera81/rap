@@ -283,7 +283,7 @@ future_words_exclusive %>%
   ggplot(aes(title, sentiment, fill = album_title)) +
   geom_col() +
   coord_flip() + 
-  facet_wrap(~album_title, scales = "free", ncol = 2) +
+  facet_wrap(~album_title, scales = "free_y", ncol = 2) +
   # Remove the legend
   scale_fill_discrete(guide = FALSE)
 ```
