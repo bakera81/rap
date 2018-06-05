@@ -33,13 +33,13 @@ def db_connect(echo=True):
 
 
 def to_db(engine, df, tablename='songs_v3'):
-    df.to_sql('songs_v3', engine, if_exists='append', chunksize=30)
+    df.to_sql('songs_v4', engine, if_exists='append', chunksize=30)
 
 
 Base = declarative_base()
 # Store JSON as JSON? Arrays as Arrays?
 class Song(Base):
-    __tablename__ = 'songs_v3'
+    __tablename__ = 'songs_v4'
 
     # song_id = Column(Integer, primary_key=True)
     # title = Column(String(255))

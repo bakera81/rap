@@ -245,27 +245,46 @@ future_words_exclusive %>%
              by = "word") %>%
   count(word, sort = T)
 
-major_albums <- songs %>%
+
+songs %>%
   filter(!is.na(album_title),
          !is.na(album_id)) %>%
   distinct(song_id, .keep_all = T) %>%
-  count(album_id, album_title, sort = T) %>%
-  filter(n > 5) %>%
-  # manually filter a lil more
-  filter(!album_id %in% c(22223, 295414, 295459))
+  count(album_id, album_title, sort = T) %>% 
+  View()
 
-# TODO hide legend
+# From https://en.wikipedia.org/wiki/Future_discography
+studio_albums <- c(330482, 332229, 41797, 127543, 143267, 16305, 131405, 375408)
+  
+future_words_exclusive <- future_words_exclusive %>%
+  mutate(album_type = case_when(
+    album_id %in% studio_albums ~ "studio",
+    # TODO: Add official mixtape releases
+    TRUE ~ "other"
+  ))
+
+ordered_release_dates <- future_words_exclusive %>%
+  filter(album_type == "studio") %>%
+  distinct(album_id, .keep_all = T) %>%
+  group_by(album_id, album_title) %>%
+  mutate(album_release_date = min(release_date, na.rm = T)) %>%
+  ungroup() %>%
+  arrange(album_release_date) %>%
+  pull(album_title)
+
 future_words_exclusive %>%
-  # only include major albums
-  inner_join(major_albums %>% select(album_id),
-             by = "album_id") %>%
+  filter(album_type == "studio") %>%
   inner_join(get_sentiments("bing"), by = "word") %>%
   count(song_id, title, album_title, sentiment) %>%
+  # arrange(album_release_date) %>%
   spread(sentiment, n, fill = 0L) %>%
-  mutate(sentiment = positive - negative) %>%
+  mutate(sentiment = positive - negative,
+         album_title = factor(album_title, levels = ordered_release_dates)) %>%
   ggplot(aes(title, sentiment, fill = album_title)) +
   geom_col() +
   coord_flip() + 
-  facet_wrap(~album_title) 
+  facet_wrap(~album_title, scales = "free", ncol = 2) +
+  # Remove the legend
+  scale_fill_discrete(guide = FALSE)
 ```
 
